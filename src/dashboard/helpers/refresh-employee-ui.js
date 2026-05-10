@@ -22,6 +22,8 @@ export function refreshEmployeeUI(data, dashboardState) {
     return matchesSearch && matchesRole;
   });
 
+  filtered.sort((a, b) => a.name.localeCompare(b.name));
+
   renderTableFilters(
     "empFilterContainer",
     { role: roles },

@@ -29,6 +29,8 @@ export function refreshRoomUI(data, dashboardState) {
     return matchesSearch && matchesType && matchesStatus;
   });
 
+  filtered.sort((a, b) => a.number.localeCompare(b.number, undefined, { numeric: true }));
+
   renderTableFilters(
     "roomFilterContainer",
     { type: types, status: statuses },
