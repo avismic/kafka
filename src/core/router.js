@@ -5,12 +5,15 @@
 import { initRegister } from '../register/register.js';
 // 1. IMPORT the real dashboard module
 import { initDashboard } from '../dashboard/dashboard.js'; 
+import { initLogin } from '../login/login.js';
+import { initSettings } from '../settings/settings.js';
 
 const routes = {
     '': initRegister,
     '#register': initRegister,
-    // 2. UPDATE this line to use the imported function
-    '#dashboard': initDashboard 
+    '#dashboard': initDashboard,
+    '#login': initLogin,
+    '#settings': initSettings,
 };
 
 export function handleRoute() {

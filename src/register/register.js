@@ -5,6 +5,7 @@
 
 import { renderExcelUpload } from "./components/excel-upload.js";
 import { state as globalState } from "../core/state.js";
+import { api } from "../core/api.js";
 
 const state = {
   currentStep: 1,
@@ -89,6 +90,11 @@ function bindStep1Events(containerId) {
       alert("Passwords do not match");
       return;
     }
+
+    // Save data from Step 1 into state
+    const formData = new FormData(form);
+    state.formData = Object.fromEntries(formData);
+
     state.currentStep = 2;
     renderStep(containerId);
   });
@@ -108,22 +114,41 @@ function bindStep2Events(containerId) {
 
 function bindStep3Events(containerId) {
   const form = document.getElementById("extendedInfoForm");
-  form.addEventListener("submit", (e) => {
+
+  form.addEventListener("submit", async (e) => {
     e.preventDefault();
 
     const formData = new FormData(form);
     const hotelDetails = Object.fromEntries(formData);
 
-    // Save both form fields AND the parsed CSV content
-    hotelDetails.employeeRawData = window.tempCSVData || "";
-    globalState.saveHotelData(hotelDetails);
+    // Ensure 'hotelName' from form maps to 'name' for the database
+    const finalPayload = {
+      name: state.formData.hotelName, // Map hotelName to name
+      email: state.formData.email,
+      password: state.formData.password,
+      phone: state.formData.phone,
+      employeeCount: hotelDetails.employeeCount,
+      roomCount: hotelDetails.roomCount,
+    };
 
-    const app = document.getElementById(containerId);
-    app.style.opacity = "0";
+    try {
+      const response = await api.request("/auth/register", {
+        method: "POST",
+        body: JSON.stringify(finalPayload),
+      });
 
-    setTimeout(() => {
-      alert("Registration Complete.");
-      window.location.hash = "#dashboard";
-    }, 300);
+      console.log("Server Registration Success:", response);
+
+      const app = document.getElementById(containerId);
+      app.style.opacity = "0";
+
+      setTimeout(() => {
+        alert("Registration Complete. Welcome to Kafka.");
+        window.location.hash = "#login"; // Redirect to login now that we have a database
+      }, 300);
+    } catch (error) {
+      console.error("Registration failed:", error);
+      alert(`Registration Error: ${error.message}`);
+    }
   });
 }

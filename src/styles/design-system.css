@@ -31,3 +31,26 @@ body {
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
 }
+
+/* Kafka Premium Toast */
+.kafka-toast {
+    position: fixed;
+    top: 55px;
+    right: 24px;
+    background: #000;
+    color: #fff;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    transform: translateY(-20px);
+    opacity: 0;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 9999;
+}
+
+.kafka-toast.visible {
+    transform: translateY(0);
+    opacity: 1;
+}

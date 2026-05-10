@@ -1,0 +1,1981 @@
+Directory structure:
+└── kafka/
+    ├── README.md
+    ├── index.html
+    ├── sw.js
+    ├── public/
+    │   └── manifest.json
+    └── src/
+        ├── core/
+        │   ├── app.js
+        │   ├── router.js
+        │   ├── state.js
+        │   └── components/
+        │       ├── nav.css
+        │       └── nav.js
+        ├── dashboard/
+        │   ├── dashboard.css
+        │   ├── dashboard.js
+        │   └── components/
+        │       ├── employee-list.js
+        │       ├── pagination.js
+        │       ├── room-list.js
+        │       ├── search-bar.js
+        │       └── table-filters.js
+        ├── login/
+        │   ├── login.css
+        │   └── login.js
+        ├── register/
+        │   ├── register.css
+        │   ├── register.js
+        │   └── components/
+        │       └── excel-upload.js
+        ├── settings/
+        │   ├── settings.css
+        │   └── settings.js
+        └── styles/
+            └── design-system.css
+
+================================================
+FILE: README.md
+================================================
+[Binary file]
+
+
+================================================
+FILE: index.html
+================================================
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <title>Kafka</title>
+
+    <link rel="manifest" href="./public/manifest.json" />
+    <meta name="theme-color" content="#ffffff" />
+
+    <link rel="stylesheet" href="./src/styles/design-system.css" />
+    <link rel="stylesheet" href="./src/register/register.css" />
+    <link rel="stylesheet" href="./src/dashboard/dashboard.css" />
+    <link rel="stylesheet" href="./src/core/components/nav.css" />
+    <link rel="stylesheet" href="./src/login/login.css">
+    <link rel="stylesheet" href="./src/settings/settings.css">
+
+    <script type="module" src="./src/core/app.js"></script>
+  </head>
+  <body>
+    <header id="global-nav-container"></header>
+    <main id="app">
+      <div class="loading-state">
+        <p>Initializing Kafka...</p>
+      </div>
+    </main>
+  </body>
+</html>
+
+
+
+================================================
+FILE: sw.js
+================================================
+const CACHE_NAME = 'kafka-v1';
+const ASSETS_TO_CACHE = [
+    '/',
+    '/index.html',
+    '/src/styles/design-system.css',
+    '/src/core/app.js'
+];
+
+// Install event: Cache core foundational assets
+self.addEventListener('install', (event) => {
+    event.waitUntil(
+        caches.open(CACHE_NAME).then((cache) => {
+            // we use addAll but wrap it to continue even if some files (like icons) are missing
+            return Promise.allSettled(
+                ASSETS_TO_CACHE.map(url => cache.add(url))
+            );
+        })
+    );
+});
+
+// Fetch event: Network-first strategy with extension filtering
+self.addEventListener('fetch', (event) => {
+    const url = new URL(event.request.url);
+
+    // FIX: Ignore non-http(s) protocols (like chrome-extension://)
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+        return;
+    }
+
+    event.respondWith(
+        fetch(event.request)
+            .then((response) => {
+                // If network works, return response
+                return response;
+            })
+            .catch(() => {
+                // If network fails, try the cache
+                return caches.match(event.request);
+            })
+    );
+});
+
+
+================================================
+FILE: public/manifest.json
+================================================
+{
+  "name": "Kafka",
+  "short_name": "Kafka",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "description": "A high-performance, modular PWA with minimalist design.",
+  "icons": [
+    {
+      "src": "assets/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "assets/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
+
+
+================================================
+FILE: src/core/app.js
+================================================
+/**
+ * Project Kafka - Core Application Entry
+ * Handles Service Worker registration and Module mounting.
+ */
+import { handleRoute } from "./router.js";
+import { renderNav } from './components/nav.js';
+
+async function registerServiceWorker() {
+  if ("serviceWorker" in navigator) {
+    try {
+      await navigator.serviceWorker.register("./sw.js");
+    } catch (error) {
+      console.error("SW failed:", error);
+    }
+  }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  registerServiceWorker();
+  handleRoute(); // Initialize the first route
+  renderNav('global-nav-container');
+});
+
+
+
+================================================
+FILE: src/core/router.js
+================================================
+/**
+ * src/core/router.js
+ * Minimalist Hash-based Router for Project Kafka
+ */
+import { initRegister } from '../register/register.js';
+// 1. IMPORT the real dashboard module
+import { initDashboard } from '../dashboard/dashboard.js'; 
+import { initLogin } from '../login/login.js';
+import { initSettings } from '../settings/settings.js';
+
+const routes = {
+    '': initRegister,
+    '#register': initRegister,
+    '#dashboard': initDashboard,
+    '#login': initLogin,
+    '#settings': initSettings,
+};
+
+export function handleRoute() {
+    const hash = window.location.hash;
+    const routeAction = routes[hash] || routes[''];
+    
+    const app = document.getElementById('app');
+    app.style.opacity = '0';
+    
+    setTimeout(() => {
+        routeAction('app');
+        app.style.opacity = '1';
+    }, 200);
+}
+
+window.addEventListener('hashchange', handleRoute);
+
+
+================================================
+FILE: src/core/state.js
+================================================
+/**
+ * src/core/state.js
+ * Global State Management for Project Kafka
+ */
+
+const STORAGE_KEY = 'kafka_hotel_data';
+
+export const state = {
+    // Save data to localStorage
+    saveHotelData(data) {
+        const currentData = this.getHotelData();
+        const updatedData = { ...currentData, ...data };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedData));
+        console.log('State Updated:', updatedData);
+    },
+
+    // Retrieve data from localStorage
+    getHotelData() {
+        const data = localStorage.getItem(STORAGE_KEY);
+        return data ? JSON.parse(data) : {};
+    }
+};
+
+
+================================================
+FILE: src/core/components/nav.css
+================================================
+/* src/core/components/nav.css */
+.global-nav {
+    position: sticky;
+    top: 0;
+    width: 100%;
+    height: 48px;
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: saturate(180%) blur(20px); /* Apple-style glassmorphism */
+    border-bottom: 1px solid var(--color-border);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+}
+
+.nav-content {
+    max-width: 1000px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 0 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.nav-logo {
+    font-weight: 600;
+    font-size: 18px;
+    letter-spacing: -0.01em;
+}
+
+.nav-links {
+    list-style: none;
+    display: flex;
+    gap: 24px;
+}
+
+.nav-item {
+    text-decoration: none;
+    color: var(--color-text);
+    font-size: 12px;
+    font-weight: 400;
+    opacity: 0.8;
+    transition: var(--transition-smooth);
+}
+
+.nav-item:hover {
+    opacity: 1;
+}
+
+
+================================================
+FILE: src/core/components/nav.js
+================================================
+/**
+ * src/core/components/nav.js
+ * Global Navigation Component for Project Kafka
+ */
+
+export function renderNav(containerId) {
+    const navContainer = document.getElementById(containerId);
+    if (!navContainer) return;
+
+    navContainer.innerHTML = `
+        <nav class="global-nav">
+            <div class="nav-content">
+                <div class="nav-logo">Kafka</div>
+                <ul class="nav-links">
+                    <li><a href="#dashboard" class="nav-item">Dashboard</a></li>
+                    <li><a href="#settings" class="nav-item">Account</a></li>
+                </ul>
+            </div>
+        </nav>
+    `;
+}
+
+
+================================================
+FILE: src/dashboard/dashboard.css
+================================================
+.dashboard-container {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: var(--section-padding) 20px;
+}
+
+.dashboard-header {
+  margin-bottom: 40px;
+}
+
+.dashboard-header h1 {
+  font-size: 34px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 24px;
+}
+
+.stats-card {
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
+  padding: 24px;
+  opacity: 0;
+  transform: translateY(10px);
+  animation: revealCard 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  transition: var(--transition-smooth);
+}
+
+.stats-card:nth-child(1) {
+  animation-delay: 0.1s;
+}
+.stats-card:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.stats-card:hover {
+  border-color: var(--color-text);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.stats-card h3 {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-subtext);
+  margin-bottom: 8px;
+}
+
+.stat-value {
+  font-size: 32px;
+  font-weight: 600;
+}
+
+@keyframes revealCard {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.employee-table-wrapper {
+  margin-top: 0;
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
+  overflow: hidden;
+}
+
+.employee-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  text-align: left;
+}
+
+.employee-table th {
+  background: #f9f9f9;
+  padding: 16px 24px;
+  font-weight: 600;
+  color: var(--color-subtext);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.employee-table td {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
+  height: 64px;
+}
+
+.employee-table tr:last-child td {
+  border-bottom: none;
+}
+
+.no-data {
+  text-align: center;
+  padding: 40px;
+  color: var(--color-subtext);
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin: 40px 0 20px;
+}
+
+.section-header h2 {
+  font-size: 24px;
+  margin: 0;
+}
+
+.update-btn {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 8px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 20px; /* Capsule style */
+  cursor: pointer;
+  transition: var(--transition-smooth);
+}
+
+.update-btn:hover {
+  background: var(--color-text);
+  color: var(--color-bg);
+  border-color: var(--color-text);
+}
+
+.room-table-wrapper {
+  margin-top: 0;
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
+  overflow: hidden;
+}
+
+.room-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  text-align: left;
+}
+
+.room-table th,
+.room-table td {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.room-table td {
+  vertical-align: middle;
+  height: 64px;
+}
+
+.status-badge {
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.status-badge.clean {
+  background: #e3f9e5;
+  color: #1f7a2d;
+}
+.status-badge.occupied {
+  background: #fff4e5;
+  color: #b35900;
+}
+.status-badge.maintenance {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.status-badge.dirty {
+  background: #c8c8c8;
+  color: #000000;
+}
+
+.search-container {
+  margin-bottom: 32px;
+  width: 100%;
+}
+
+#universalSearch {
+  width: 100%;
+  padding: 14px 20px;
+  font-size: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
+  background: #fff;
+  outline: none;
+  transition: var(--transition-smooth);
+}
+
+#universalSearch:focus {
+  border-color: var(--color-text);
+  box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.05);
+}
+
+.edit-btn {
+  background: none;
+  border: 1px solid var(--color-border);
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+}
+
+.edit-btn:hover {
+  background: var(--color-text);
+  color: var(--color-bg);
+}
+
+.save-active {
+  background: #000 !important;
+  color: #fff !important;
+  border-color: #000 !important;
+}
+
+.editing-input {
+  width: 100%;
+  height: 36px;
+  padding: 0 12px;
+  margin: 0;
+  box-sizing: border-box;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 13px;
+  background-color: #fff;
+  outline: none;
+  transition: border-color 0.2s ease;
+  display: block; /* Ensures they fill the horizontal space of the <td> */
+}
+
+.editing-input:focus {
+  border-color: var(--color-text);
+}
+
+select.editing-input {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%23666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m3 5 3 3 3-3'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+}
+
+.pagination-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-top: none;
+  border-radius: 0 0 var(--border-radius) var(--border-radius);
+  font-size: 13px;
+  color: var(--color-subtext);
+}
+
+.pagination-nav {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.nav-btn,
+.size-btn {
+  background: none;
+  border: 1px solid var(--color-border);
+  padding: 4px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+}
+
+.nav-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.size-btn.active {
+  background: var(--color-text);
+  color: #fff;
+  border-color: var(--color-text);
+}
+
+.page-indicator {
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.delete-btn {
+  background: none;
+  border: 1px solid var(--color-border);
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 11px;
+  color: #991b1b;
+  cursor: pointer;
+  margin-left: 8px;
+  transition: var(--transition-smooth);
+}
+
+.delete-btn:hover {
+  background: #fee2e2;
+  border-color: #991b1b;
+}
+
+.delete-btn.delete-primed {
+  background: #991b1b;
+  color: #fff;
+  border-color: #991b1b;
+  font-weight: 600;
+}
+
+.table-filters {
+  display: flex;
+  flex-direction: row; /* Force horizontal layout */
+  align-items: center; /* Align labels and selects vertically */
+  gap: 32px; /* Generous horizontal whitespace */
+  padding: 12px 24px; /* Reduced vertical padding */
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-bottom: none;
+  border-radius: var(--border-radius) var(--border-radius) 0 0;
+  margin-bottom: 0;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: row; /* Horizontal layout for label + select */
+  align-items: center;
+  gap: 12px;
+}
+
+.filter-group label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-subtext);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap; /* Prevent label from wrapping */
+}
+
+.filter-select {
+  border: 1px solid var(--color-border);
+  background: #fff;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  min-width: 120px; /* Ensure consistent width for dropdowns */
+  outline: none;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+}
+
+.filter-select:focus {
+  border-color: var(--color-text);
+}
+
+/* --- Precision Room Table Geometry --- */
+
+/* 1. Set explicit widths for the Room Table columns */
+.room-table th:nth-child(1),
+.room-table td:nth-child(1) {
+  width: 10%;
+} /* Room No. (Smaller target) */
+
+.room-table th:nth-child(2),
+.room-table td:nth-child(2) {
+  width: 20%;
+} /* Type */
+
+.room-table th:nth-child(3),
+.room-table td:nth-child(3) {
+  width: 20%;
+} /* Status */
+
+.room-table th:nth-child(4),
+.room-table td:nth-child(4) {
+  width: 14%;
+} /* Last Cleaned */
+
+.room-table th:nth-child(5),
+.room-table td:nth-child(5) {
+  width: 20%;
+} /* Actions */
+
+/* 2. Ensure inputs respect these narrow widths without overflow */
+.room-table .editing-input {
+  max-width: 100%; /* Constraints input to the defined cell width */
+}
+
+/* --- Precision Employee Table Geometry --- */
+
+/* 1. Set explicit widths for the 4-Column Role-Only layout */
+.employee-table th:nth-child(1),
+.employee-table td:nth-child(1) {
+  width: 15%;
+} /* Full Name */
+
+.employee-table th:nth-child(2),
+.employee-table td:nth-child(2) {
+  width: 20%;
+} /* Email */
+
+.employee-table th:nth-child(3),
+.employee-table td:nth-child(3) {
+  width: 16%;
+} /* Role (Dropdown target) */
+
+.employee-table th:nth-child(4),
+.employee-table td:nth-child(4) {
+  width: 25%;
+} /* Actions (Save/Delete) */
+
+/* 2. Universal constraint for editing inputs within this table */
+.employee-table .editing-input {
+  max-width: 100%;
+  box-sizing: border-box; /* Ensures padding doesn't break the width */
+}
+
+
+
+
+================================================
+FILE: src/dashboard/dashboard.js
+================================================
+/**
+ * src/dashboard/dashboard.js
+ * Feature Controller for Kafka Management Dashboard
+ * Handles dynamic updates for both Employees and Rooms.
+ */
+import { state as globalState } from "../core/state.js";
+import { renderEmployeeList } from "./components/employee-list.js";
+import { renderRoomList } from "./components/room-list.js";
+import { renderSearchBar } from "./components/search-bar.js";
+import { renderPagination } from "./components/pagination.js";
+import { renderTableFilters } from "./components/table-filters.js";
+
+
+const dashboardState = {
+  employee: { page: 1, size: 5, filters: { role: "all" } },
+  room: { page: 1, size: 5, filters: { type: "all", status: "all" } },
+  searchQuery: "",
+};
+
+export function initDashboard(containerId) {
+  const app = document.getElementById(containerId);
+  const data = globalState.getHotelData();
+
+  app.innerHTML = `
+        <div class="dashboard-container">
+            <header class="dashboard-header">
+                <h1>${data.hotelName || "Hotel"} Dashboard</h1>
+                <p>Welcome to your Kafka Management Suite.</p>
+            </header>
+            <div id="searchBarContainer"></div>
+            
+            <div class="dashboard-grid">
+                <div class="stats-card">
+                    <h3>Total Employees</h3>
+                    <p class="stat-value" id="empStatCount">${data.employeeCount || "0"}</p>
+                </div>
+                <div class="stats-card">
+                    <h3>Active Rooms</h3>
+                    <p class="stat-value" id="roomStatCount">${data.roomCount || "0"}</p>
+                </div>
+            </div>
+
+            <section id="employeeSection">
+                <div class="section-header">
+                    <h2>Employee Records</h2>
+                    <label for="updateEmpInput" class="update-btn">Update List</label>
+                    <input type="file" id="updateEmpInput" accept=".csv" hidden>
+                </div>
+                <div id="empFilterContainer"></div>
+                <div id="employeeListContainer"></div>
+                <div id="empPaginationContainer"></div>
+            </section>
+
+            <section id="roomSection">
+                <div class="section-header">
+                    <h2>Room Records</h2>
+                    <label for="updateRoomInput" class="update-btn">Update Rooms</label>
+                    <input type="file" id="updateRoomInput" accept=".csv" hidden>
+                </div>
+                <div id="roomFilterContainer"></div>
+                <div id="roomListContainer"></div>
+                <div id="roomPaginationContainer"></div>
+            </section>
+        </div>
+    `;
+
+  // 1. Initial Render from stored data
+  refreshEmployeeUI(data.employeeRawData || "");
+  refreshRoomUI(data.roomRawData || "");
+
+  // 2. Bind Employee Update Event
+  document.getElementById("updateEmpInput").addEventListener("change", (e) => {
+    handleFileUpdate(e.target.files[0], "employee");
+  });
+
+  // 3. Bind Room Update Event
+  document.getElementById("updateRoomInput").addEventListener("change", (e) => {
+    handleFileUpdate(e.target.files[0], "room");
+  });
+
+  // Initialize Search
+  renderSearchBar("searchBarContainer", (query) => {
+
+    // 1. Update the global search query
+    dashboardState.searchQuery = query.toLowerCase();
+
+    // 2. Reset pages to 1 when searching
+    dashboardState.employee.page = 1;
+    dashboardState.room.page = 1;
+
+    // 3. Trigger unified refresh
+    const currentData = globalState.getHotelData();
+    refreshEmployeeUI(currentData.employeeRawData || "");
+    refreshRoomUI(currentData.roomRawData || "");
+  });
+}
+
+function handleFileUpdate(file, type) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    const content = event.target.result;
+
+    if (type === "employee") {
+      const employees = parseEmployeeCSV(content);
+      refreshEmployeeUI(content);
+      globalState.saveHotelData({
+        employeeRawData: content,
+        employeeCount: employees.length,
+      });
+      document.getElementById("empStatCount").textContent = employees.length;
+    } else {
+      const rooms = parseRoomCSV(content);
+      refreshRoomUI(content);
+      globalState.saveHotelData({
+        roomRawData: content,
+        roomCount: rooms.length,
+      });
+      document.getElementById("roomStatCount").textContent = rooms.length;
+    }
+  };
+  reader.readAsText(file);
+}
+
+// Example for Employee Refresh
+function refreshEmployeeUI(csvData) {
+  const all = parseEmployeeCSV(csvData);
+
+  // 1. Get Unique Filter Options
+  const roles = [...new Set(all.map((e) => e.role))];
+
+  // 2. Apply Unified Filtering (Search + Selectors)
+  const filtered = all.filter((e) => {
+    const matchesSearch = Object.values(e).some((val) =>
+      val?.toString().toLowerCase().includes(dashboardState.searchQuery),
+    );
+
+    const matchesRole =
+      dashboardState.employee.filters.role === "all" ||
+      e.role === dashboardState.employee.filters.role;
+
+    return matchesSearch && matchesRole;
+  });
+
+  // 3. Render Components
+  renderTableFilters(
+    "empFilterContainer",
+    { role: roles }, // Argument 2: Available options
+    { role: dashboardState.employee.filters.role }, // Argument 3: Active state
+    (key, val) => {
+      // Argument 4: Callback logic
+      dashboardState.employee.filters[key] = val;
+      dashboardState.employee.page = 1;
+      refreshEmployeeUI(csvData);
+    },
+  );
+
+  const { page, size } = dashboardState.employee;
+  const paginated = filtered.slice((page - 1) * size, page * size);
+  renderEmployeeList("employeeListContainer", paginated);
+  renderPagination(
+    "empPaginationContainer",
+    { total: filtered.length, current: page, size },
+    (p) => {
+      dashboardState.employee.page = p;
+      refreshEmployeeUI(csvData);
+    },
+    (s) => {
+      dashboardState.employee.size = s;
+      dashboardState.employee.page = 1;
+      refreshEmployeeUI(csvData);
+    },
+  );
+}
+
+/**
+ * Unified Refresh logic for Room Records (Search + Filter + Pagination)
+ */
+function refreshRoomUI(csvData) {
+  const all = parseRoomCSV(csvData);
+
+  // 1. Extract Unique Values for Dynamic Filters [cite: 532]
+  const types = [...new Set(all.map((r) => r.type))];
+  const statuses = [...new Set(all.map((r) => r.status))];
+
+  // 2. Multi-Layered Filtering Pass [cite: 534, 536]
+  const filtered = all.filter((r) => {
+    const matchesSearch = Object.values(r).some((v) =>
+      v.toLowerCase().includes(dashboardState.searchQuery),
+    );
+    const matchesType =
+      dashboardState.room.filters.type === "all" ||
+      r.type === dashboardState.room.filters.type;
+    const matchesStatus =
+      dashboardState.room.filters.status === "all" ||
+      r.status === dashboardState.room.filters.status;
+
+    return matchesSearch && matchesType && matchesStatus;
+  });
+
+  // 3. Render Top Filter Component [cite: 532, 535]
+  // Pass the current room filter state
+  renderTableFilters(
+    "roomFilterContainer",
+    { type: types, status: statuses },
+    dashboardState.room.filters,
+    (key, val) => {
+      dashboardState.room.filters[key] = val;
+      dashboardState.room.page = 1;
+      refreshRoomUI(csvData);
+    },
+  );
+
+  // 4. Handle Pagination Slicing [cite: 464, 534]
+  const { page, size } = dashboardState.room;
+  const paginated = filtered.slice((page - 1) * size, page * size);
+
+  renderRoomList("roomListContainer", paginated);
+
+  // 5. Render Bottom Pagination Component [cite: 459, 464]
+  renderPagination(
+    "roomPaginationContainer",
+    { total: filtered.length, current: page, size },
+    (p) => {
+      dashboardState.room.page = p;
+      refreshRoomUI(csvData);
+    },
+    (s) => {
+      dashboardState.room.size = s;
+      dashboardState.room.page = 1;
+      refreshRoomUI(csvData);
+    },
+  );
+}
+
+function parseEmployeeCSV(csvText) {
+  if (!csvText) return [];
+  const lines = csvText.trim().split("\n");
+  return lines.slice(1).map((line) => {
+    const v = line.split(",").map((item) => item.trim());
+    return { name: v[0], email: v[1], role: v[2], dept: v[3] };
+  });
+}
+
+function parseRoomCSV(csvText) {
+  if (!csvText) return [];
+  const lines = csvText.trim().split("\n");
+  return lines.slice(1).map((line) => {
+    const v = line.split(",").map((item) => item.trim());
+    return { number: v[0], type: v[1], status: v[2], lastCleaned: v[3] };
+  });
+}
+
+/**
+ * Update a specific record in the local data and save to state
+ */
+function updateRecord(type, index, updatedRowArray) {
+  const data = globalState.getHotelData();
+
+  // Explicitly determine which key to use based on the validated type
+  const storageKey = type === "employee" ? "employeeRawData" : "roomRawData";
+  let rawData = data[storageKey];
+
+  if (!rawData) return;
+
+  const lines = rawData.trim().split("\n");
+  const headers = lines[0];
+  const records = lines.slice(1);
+
+  // Update only the targeted record [cite: 9]
+  records[index] = updatedRowArray.join(", ");
+
+  const newRawData = [headers, ...records].join("\n");
+
+  const updateObj = {};
+  updateObj[storageKey] = newRawData;
+
+  globalState.saveHotelData(updateObj);
+}
+
+/**
+ * src/dashboard/dashboard.js
+ * Enhanced Inline Edit Handler with Context-Aware Dropdowns for Employees & Rooms
+ */
+window.handleEdit = function (btn, index, type) {
+  const row = btn.closest("tr");
+  const cells = row.querySelectorAll("td:not(.actions-cell)");
+  const isEditing = btn.textContent === "Save";
+  const data = globalState.getHotelData();
+
+  if (!isEditing) {
+    // 1. Extract unique values for dynamic dropdowns
+    // For Employees
+    const allEmployees = parseEmployeeCSV(data.employeeRawData || "");
+    const roles = [...new Set(allEmployees.map((e) => e.role))];
+    const depts = [...new Set(allEmployees.map((e) => e.dept))];
+
+    // For Rooms
+    const allRooms = parseRoomCSV(data.roomRawData || "");
+    const roomTypes = [...new Set(allRooms.map((r) => r.type))];
+    const roomStatuses = [...new Set(allRooms.map((r) => r.status))];
+
+    // 2. Switch to Edit Mode with specific Input/Select Logic
+    /**
+     * src/dashboard/dashboard.js
+     * Fixed mapping for streamlined Role-only Employee table
+     */
+    cells.forEach((cell, cellIndex) => {
+      const currentText = cell.textContent.trim();
+
+      // Updated Mapping Logic for Role-Only View
+      if (type === "employee" && cellIndex === 2) {
+        // FIX: In a 4-column layout, Role is now strictly at index 2
+        cell.innerHTML = `
+      <select class="editing-input">
+        ${roles.map((opt) => `<option value="${opt}" ${opt === currentText ? "selected" : ""}>${opt}</option>`).join("")}
+      </select>`;
+      } else if (type === "room" && (cellIndex === 1 || cellIndex === 2)) {
+        // Room Mapping remains: 1:Type, 2:Status
+        const options = cellIndex === 1 ? roomTypes : roomStatuses;
+        cell.innerHTML = `
+      <select class="editing-input">
+        ${options.map((opt) => `<option value="${opt}" ${opt === currentText ? "selected" : ""}>${opt}</option>`).join("")}
+      </select>`;
+      } else {
+        // Standard text input for Name (0) and Email (1)
+        cell.innerHTML = `<input type="text" class="editing-input" value="${currentText}">`;
+      }
+    });
+
+    btn.textContent = "Save";
+    btn.classList.add("save-active");
+  } else {
+    // 3. Execute Save Logic
+    const inputs = row.querySelectorAll(".editing-input");
+    const updatedRow = Array.from(inputs).map((input) => input.value);
+
+    updateRecord(type, index, updatedRow);
+
+    // 4. Refresh UI from updated state
+    const currentData = globalState.getHotelData();
+    if (type === "employee") {
+      refreshEmployeeUI(currentData.employeeRawData);
+    } else {
+      refreshRoomUI(currentData.roomRawData);
+    }
+  }
+};
+
+/**
+ * Two-stage deletion logic for a smoother, non-intrusive UI experience.
+ */
+window.handleDeleteEmployee = function (btn, index) {
+  const isPrimed = btn.classList.contains("delete-primed");
+
+  if (!isPrimed) {
+    // Stage 1: Prime the button
+    btn.textContent = "Sure?";
+    btn.classList.add("delete-primed");
+
+    // Reset after 3 seconds if not confirmed
+    setTimeout(() => {
+      if (btn) {
+        btn.textContent = "Delete";
+        btn.classList.remove("delete-primed");
+      }
+    }, 3000);
+    return;
+  }
+
+  // Stage 2: Confirmed Deletion
+  const data = globalState.getHotelData();
+  let rawData = data.employeeRawData;
+  if (!rawData) return;
+
+  const lines = rawData.trim().split("\n");
+  const headers = lines[0];
+  const records = lines.slice(1);
+
+  records.splice(index, 1);
+
+  const newRawData = [headers, ...records].join("\n");
+
+  globalState.saveHotelData({
+    employeeRawData: newRawData,
+    employeeCount: records.length,
+  });
+
+  document.getElementById("empStatCount").textContent = records.length;
+  refreshEmployeeUI(newRawData);
+};
+
+
+
+================================================
+FILE: src/dashboard/components/employee-list.js
+================================================
+/**
+ * src/dashboard/components/employee-list.js
+ * Specialized component for rendering the employee table.
+ */
+
+export function renderEmployeeList(containerId, employeeData) {
+  const container = document.getElementById(containerId);
+  if (!container || !employeeData) return;
+
+  if (employeeData.length === 0) {
+    container.innerHTML = `<p class="no-data">No employee records found.</p>`;
+    return;
+  }
+
+  // Creating a minimalist, refined table structure
+  container.innerHTML = `
+        <div class="employee-table-wrapper">
+            <table class="employee-table">
+                <thead>
+                    <tr>
+                        <th>Full Name</th>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${employeeData
+                      .map(
+                        (emp, index) => `
+                        <tr>
+                            <td>${emp.name}</td>
+                            <td>${emp.email}</td>
+                            <td>${emp.role}</td>
+                            <td class="actions-cell">
+                              <button class="edit-btn" onclick="handleEdit(this, ${index}, 'employee')">Edit</button>
+                              <button class="delete-btn" onclick="handleDeleteEmployee(this, ${index})">Delete</button>
+                            </td>
+                        </tr>
+                    `,
+                      )
+                      .join("")}
+                </tbody>
+            </table>
+        </div>
+    `;
+}
+
+
+
+================================================
+FILE: src/dashboard/components/pagination.js
+================================================
+/**
+ * src/dashboard/components/pagination.js
+ * Decoupled pagination component with Apple-style minimalist UI.
+ */
+export function renderPagination(containerId, { total, current, size }, onPageChange, onSizeChange) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const start = total === 0 ? 0 : (current - 1) * size + 1;
+    const end = Math.min(current * size, total);
+    const totalPages = Math.ceil(total / size) || 1;
+
+    container.innerHTML = `
+        <div class="pagination-bar">
+            <div class="pagination-info">Showing ${start}-${end} of ${total}</div>
+            
+            <div class="pagination-nav">
+                <button class="nav-btn" ${current === 1 ? 'disabled' : ''} id="prev-${containerId}">Previous</button>
+                <span class="page-indicator">Page ${current} of ${totalPages}</span>
+                <button class="nav-btn" ${current === totalPages ? 'disabled' : ''} id="next-${containerId}">Next</button>
+            </div>
+
+            <div class="pagination-sizes">
+                ${[5, 10, 20, 50, 100].map(s => `
+                    <button class="size-btn ${s === size ? 'active' : ''}" data-size="${s}">${s}</button>
+                `).join('')}
+            </div>
+        </div>
+    `;
+
+    // Event Listeners
+    document.getElementById(`prev-${containerId}`).onclick = () => onPageChange(current - 1);
+    document.getElementById(`next-${containerId}`).onclick = () => onPageChange(current + 1);
+    
+    container.querySelectorAll('.size-btn').forEach(btn => {
+        btn.onclick = () => onSizeChange(parseInt(btn.dataset.size));
+    });
+}
+
+
+================================================
+FILE: src/dashboard/components/room-list.js
+================================================
+/**
+ * src/dashboard/components/room-list.js
+ * Specialized component for rendering the room status table.
+ */
+
+export function renderRoomList(containerId, roomData) {
+  const container = document.getElementById(containerId);
+  if (!container || !roomData) return;
+
+  if (roomData.length === 0) {
+    container.innerHTML = `<p class="no-data">No room records found.</p>`;
+    return;
+  }
+
+  container.innerHTML = `
+        <div class="room-table-wrapper">
+            <table class="room-table">
+                <thead>
+                    <tr>
+                        <th>Room No.</th>
+                        <th>Type</th>
+                        <th>Status</th>
+                        <th>Last Cleaned</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                  <tbody>
+                      ${roomData.map((room, index) => {
+                          // Defensive check: Ensure status exists before calling toLowerCase()
+                          const statusClass = room.status ? room.status.toLowerCase() : 'unknown';
+                          const statusText = room.status || 'N/A';
+                          
+                          return `
+                          <tr>
+                              <td>${room.number || 'N/A'}</td>
+                              <td>${room.type || 'N/A'}</td>
+                              <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                              <td>${room.lastCleaned || 'N/A'}</td>
+                              <td class="actions-cell">
+                                  <button class="edit-btn" onclick="handleEdit(this, ${index}, 'room')">Edit</button>
+                              </td>
+                          </tr>
+                          `;
+                      }).join("")}
+                  </tbody>
+            </table>
+        </div>
+    `;
+}
+
+
+
+================================================
+FILE: src/dashboard/components/search-bar.js
+================================================
+/**
+ * src/dashboard/components/search-bar.js
+ * Universal search component for filtering dashboard tables.
+ */
+
+export function renderSearchBar(containerId, onSearch) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  container.innerHTML = `
+        <div class="search-container">
+            <input type="text" id="universalSearch" placeholder="Search employees or rooms..." autocomplete="off">
+        </div>
+    `;
+
+  const searchInput = document.getElementById("universalSearch");
+
+  // Real-time filtering on input
+  searchInput.addEventListener("input", (e) => {
+    onSearch(e.target.value.toLowerCase());
+  });
+}
+
+
+
+================================================
+FILE: src/dashboard/components/table-filters.js
+================================================
+/**
+ * src/dashboard/components/table-filters.js
+ * State-aware filtering component for Project Kafka.
+ */
+export function renderTableFilters(containerId, filters, activeFilters, onFilterChange) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    container.innerHTML = `
+        <div class="table-filters">
+            ${Object.keys(filters).map(key => {
+                const activeValue = activeFilters[key] || 'all';
+                return `
+                <div class="filter-group">
+                    <label>${key.charAt(0).toUpperCase() + key.slice(1)}</label>
+                    <select class="filter-select" data-filter="${key}">
+                        <option value="all" ${activeValue === 'all' ? 'selected' : ''}>All</option>
+                        ${filters[key].map(val => `
+                            <option value="${val}" ${activeValue === val ? 'selected' : ''}>${val}</option>
+                        `).join('')}
+                    </select>
+                </div>`;
+            }).join('')}
+        </div>
+    `;
+
+    container.querySelectorAll('.filter-select').forEach(select => {
+        select.onchange = (e) => onFilterChange(e.target.dataset.filter, e.target.value);
+    });
+}
+
+
+================================================
+FILE: src/login/login.css
+================================================
+/**
+ * src/login/login.css
+ * Apple-style monochrome layout for Project Kafka
+ */
+
+.login-container {
+    max-width: 400px;
+    margin: 100px auto;
+    padding: 40px;
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--color-border);
+    border-radius: 24px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.05);
+    text-align: center;
+}
+
+.login-header h1 {
+    font-size: 28px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    letter-spacing: -0.02em;
+}
+
+.login-header p {
+    color: var(--color-subtext);
+    margin-bottom: 32px;
+}
+
+.login-form {
+    text-align: left;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--color-subtext);
+    margin-bottom: 8px;
+    letter-spacing: 0.05em;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 14px 16px;
+    background: #f5f5f7;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    font-size: 15px;
+    transition: all 0.3s ease;
+}
+
+.form-group input:focus {
+    background: #fff;
+    border-color: var(--color-text);
+    outline: none;
+    box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.05);
+}
+
+.login-btn {
+    width: 100%;
+    padding: 16px;
+    background: var(--color-text);
+    color: #fff;
+    border: none;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+    margin-top: 12px;
+}
+
+.login-btn:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
+
+.login-footer {
+    margin-top: 32px;
+    font-size: 13px;
+    color: var(--color-subtext);
+}
+
+.login-footer a {
+    color: var(--color-text);
+    text-decoration: none;
+    font-weight: 600;
+}
+
+
+================================================
+FILE: src/login/login.js
+================================================
+/**
+ * src/login/login.js
+ * Main Controller for Kafka Login Feature
+ */
+import { state as globalState } from "../core/state.js";
+
+export function initLogin(containerId) {
+    const app = document.getElementById(containerId);
+    
+    app.innerHTML = `
+        <div class="login-container">
+            <header class="login-header">
+                <h1>Kafka Login</h1>
+                <p>Access your hotel management suite.</p>
+            </header>
+            
+            <form id="loginForm" class="login-form">
+                <div class="form-group">
+                    <label>EMAIL</label>
+                    <input type="email" id="loginEmail" placeholder="manager@hotel.com" required>
+                </div>
+                <div class="form-group">
+                    <label>PASSWORD</label>
+                    <input type="password" id="loginPassword" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" required>
+                </div>
+                <button type="submit" class="login-btn">Sign In</button>
+            </form>
+            
+            <footer class="login-footer">
+                <p>New to Kafka? <a href="#register">Register your hotel</a></p>
+            </footer>
+        </div>
+    `;
+
+    bindLoginEvents();
+}
+
+function bindLoginEvents() {
+    const form = document.getElementById('loginForm');
+    form.onsubmit = (e) => {
+        e.preventDefault();
+        
+        // Placeholder authentication logic
+        const email = document.getElementById('loginEmail').value;
+        console.log(`Authenticating: ${email}`);
+        
+        // Redirect to Dashboard on "success"
+        window.location.hash = '#dashboard';
+    };
+}
+
+
+================================================
+FILE: src/register/register.css
+================================================
+.register-container {
+  max-width: 400px;
+  margin: var(--section-padding) auto;
+  padding: 0 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.register-title {
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  text-align: center;
+}
+
+.register-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.register-form input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
+  font-size: 16px;
+  outline: none;
+  transition: var(--transition-smooth);
+}
+
+.register-form input:focus {
+  border-color: var(--color-text);
+}
+
+.register-button {
+  background: var(--color-text);
+  color: var(--color-bg);
+  border: none;
+  padding: 14px;
+  border-radius: var(--border-radius);
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+}
+
+.register-button:hover {
+  opacity: 0.9;
+}
+
+.excel-upload-zone {
+  border: 2px dashed var(--color-border);
+  border-radius: var(--border-radius);
+  padding: 30px;
+  text-align: center;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+  margin-bottom: 8px;
+}
+
+.excel-upload-zone p span {
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+
+.excel-upload-zone:hover {
+  background: #f5f5f7;
+}
+
+
+
+================================================
+FILE: src/register/register.js
+================================================
+/**
+ * src/register/register.js
+ * Feature Controller for multi-step registration (Project Kafka)
+ */
+
+import { renderExcelUpload } from "./components/excel-upload.js";
+import { state as globalState } from "../core/state.js";
+
+const state = {
+  currentStep: 1,
+  formData: {},
+};
+
+// Hardcoded OTP for development
+const DEV_OTP = "123456";
+
+export function initRegister(containerId) {
+  renderStep(containerId);
+}
+
+function renderStep(containerId) {
+  const app = document.getElementById(containerId);
+
+  switch (state.currentStep) {
+    case 1:
+      app.innerHTML = getHotelBasicInfoTemplate();
+      bindStep1Events(containerId);
+      break;
+    case 2:
+      app.innerHTML = getOTPTemplate();
+      bindStep2Events(containerId);
+      break;
+    case 3:
+      app.innerHTML = getExtendedInfoTemplate();
+      renderExcelUpload("fileUploadContainer");
+      bindStep3Events(containerId);
+      break;
+  }
+}
+
+/* Templates */
+
+function getHotelBasicInfoTemplate() {
+  return `
+        <div class="register-container">
+            <h1 class="register-title">Register Hotel</h1>
+            <form class="register-form" id="registerForm">
+                <input type="text" name="hotelName" placeholder="Hotel Name" required>
+                <input type="email" name="email" placeholder="Business Email" required>
+                <input type="tel" name="phone" placeholder="Phone Number" required>
+                <input type="password" name="password" placeholder="Password" required>
+                <input type="password" name="confirmPassword" placeholder="Confirm Password" required>
+                <button type="submit" class="register-button">Next</button>
+            </form>
+        </div>`;
+}
+
+function getOTPTemplate() {
+  return `
+        <div class="register-container">
+            <h1 class="register-title">Verify OTP</h1>
+            <p style="text-align:center; color:var(--color-subtext)">Use code: <strong>123456</strong></p>
+            <div class="register-form">
+                <input type="text" id="otpInput" placeholder="Enter 6-digit OTP" maxlength="6">
+                <button class="register-button" id="verifyOtpBtn">Verify & Continue</button>
+            </div>
+        </div>`;
+}
+
+function getExtendedInfoTemplate() {
+  return `
+        <div class="register-container">
+            <h1 class="register-title">Hotel Details</h1>
+            <form class="register-form" id="extendedInfoForm">
+                <input type="number" name="employeeCount" placeholder="Number of Employees" required>
+                <input type="number" name="roomCount" placeholder="Number of Rooms" required>
+                <div id="fileUploadContainer"></div> <button type="submit" class="register-button">Complete Registration</button>
+            </form>
+        </div>`;
+}
+
+/* Event Bindings */
+
+function bindStep1Events(containerId) {
+  const form = document.getElementById("registerForm");
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (form.password.value !== form.confirmPassword.value) {
+      alert("Passwords do not match");
+      return;
+    }
+    state.currentStep = 2;
+    renderStep(containerId);
+  });
+}
+
+function bindStep2Events(containerId) {
+  document.getElementById("verifyOtpBtn").addEventListener("click", () => {
+    const otp = document.getElementById("otpInput").value;
+    if (otp === DEV_OTP) {
+      state.currentStep = 3;
+      renderStep(containerId);
+    } else {
+      alert("Invalid OTP. Hint: 123456");
+    }
+  });
+}
+
+function bindStep3Events(containerId) {
+  const form = document.getElementById("extendedInfoForm");
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+
+    const formData = new FormData(form);
+    const hotelDetails = Object.fromEntries(formData);
+
+    // Save both form fields AND the parsed CSV content
+    hotelDetails.employeeRawData = window.tempCSVData || "";
+    globalState.saveHotelData(hotelDetails);
+
+    const app = document.getElementById(containerId);
+    app.style.opacity = "0";
+
+    setTimeout(() => {
+      alert("Registration Complete.");
+      window.location.hash = "#dashboard";
+    }, 300);
+  });
+}
+
+
+
+================================================
+FILE: src/register/components/excel-upload.js
+================================================
+/**
+ * src/register/components/excel-upload.js
+ * Local component for handling employee data uploads via Excel/CSV.
+ */
+
+export function renderExcelUpload(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  container.innerHTML = `
+        <div class="excel-upload-zone" id="dropZone">
+            <p id="fileName">Drop employee Excel/CSV here or <span>browse</span></p>
+            <input type="file" id="fileInput" accept=".csv, .xlsx, .xls" hidden>
+        </div>
+    `;
+
+  const dropZone = container.querySelector("#dropZone");
+  const fileInput = container.querySelector("#fileInput");
+  const fileNameDisplay = container.querySelector("#fileName");
+
+  // Click to browse
+  dropZone.addEventListener("click", () => fileInput.click());
+
+  // File selection handling
+  fileInput.addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (file) handleFileRead(file, fileNameDisplay);
+  });
+
+  // Simple Drag & Drop visual feedback
+  dropZone.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    dropZone.style.borderColor = "var(--color-text)";
+  });
+
+  dropZone.addEventListener("dragleave", () => {
+    dropZone.style.borderColor = "var(--color-border)";
+  });
+
+  dropZone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (file) handleFileRead(file, fileNameDisplay);
+    dropZone.style.borderColor = "var(--color-border)";
+  });
+
+  function handleFileRead(file, displayElement) {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target.result;
+      // Store raw CSV in a temporary state or broadcast it
+      window.tempCSVData = content;
+      displayElement.textContent = `Ready: ${file.name}`;
+    };
+    reader.readAsText(file);
+  }
+}
+
+
+
+================================================
+FILE: src/settings/settings.css
+================================================
+/**
+ * src/settings/settings.css
+ * Apple-style monochrome layout for Settings & Logout
+ */
+
+.settings-container {
+    max-width: 800px;
+    margin: 40px auto;
+    padding: 40px;
+}
+
+.settings-header {
+    margin-bottom: 48px;
+}
+
+.settings-header h1 {
+    font-size: 34px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    margin-bottom: 8px;
+}
+
+.settings-header p {
+    color: var(--color-subtext);
+    font-size: 17px;
+}
+
+.settings-section {
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--color-border);
+    border-radius: 20px;
+    overflow: hidden;
+}
+
+.setting-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 24px 32px;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.setting-item:last-child {
+    border-bottom: none;
+}
+
+.setting-info h3 {
+    font-size: 17px;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.setting-info p {
+    font-size: 14px;
+    color: var(--color-subtext);
+}
+
+/* Logout Button - Distinct Apple-style button */
+.logout-btn {
+    padding: 10px 24px;
+    background: #000;
+    color: #fff;
+    border: none;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.logout-btn:hover {
+    opacity: 0.8;
+    transform: translateY(-1px);
+}
+
+/* Critical Section Highlight */
+.setting-item.critical {
+    background: #fffafa; /* Subtle red hint for destructive actions */
+}
+
+
+================================================
+FILE: src/settings/settings.js
+================================================
+/**
+ * src/settings/settings.js
+ * Feature Controller for Project Kafka Settings & Logout
+ */
+import { state as globalState } from "../core/state.js";
+
+export function initSettings(containerId) {
+    const app = document.getElementById(containerId);
+    const data = globalState.getHotelData();
+
+    app.innerHTML = `
+        <div class="settings-container">
+            <header class="settings-header">
+                <h1>Application Settings</h1>
+                <p>Manage your local environment and account state.</p>
+            </header>
+
+            <section class="settings-section">
+                <div class="setting-item">
+                    <div class="setting-info">
+                        <h3>Hotel Profile</h3>
+                        <p>Current active hotel: <strong>${data.hotelName || 'None'}</strong></p>
+                    </div>
+                </div>
+
+                <div class="setting-item critical">
+                    <div class="setting-info">
+                        <h3>Logout & Reset</h3>
+                        <p>This will clear all local data and return you to the login screen.</p>
+                    </div>
+                    <button id="logoutBtn" class="logout-btn">Log Out</button>
+                </div>
+            </section>
+        </div>
+    `;
+
+    bindSettingsEvents();
+}
+
+function bindSettingsEvents() {
+    const logoutBtn = document.getElementById('logoutBtn');
+    
+    logoutBtn.onclick = () => {
+        // 1. Clear persistent localStorage
+        localStorage.clear();
+        
+        // 2. Clear global in-memory state
+        globalState.saveHotelData({}); 
+        
+        // 3. Apple-style graceful redirect
+        window.location.hash = '#login';
+        
+        // 4. Force reload to ensure a fresh app state
+        window.location.reload();
+    };
+}
+
+
+================================================
+FILE: src/styles/design-system.css
+================================================
+:root {
+    /* Palette: Deep blacks, crisp whites, subtle grays */
+    --color-bg: #ffffff;
+    --color-text: #1d1d1f; /* Apple standard text */
+    --color-subtext: #86868b;
+    --color-border: #d2d2d7;
+    --color-accent: #0071e3; /* Subtle blue for interactive elements */
+    
+    /* Typography */
+    --font-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    
+    /* Spacing & Layout */
+    --spacing-base: 8px;
+    --section-padding: 40px;
+    --border-radius: 12px;
+    
+    /* Transitions */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-main);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+}
+

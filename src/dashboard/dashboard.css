@@ -81,9 +81,10 @@
 .employee-table th {
   background: #f9f9f9;
   padding: 16px 24px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--color-subtext);
   border-bottom: 1px solid var(--color-border);
+  color: #000000;
 }
 
 .employee-table td {
@@ -428,3 +429,4 @@ select.editing-input {
   max-width: 100%;
   box-sizing: border-box; /* Ensures padding doesn't break the width */
 }
+
