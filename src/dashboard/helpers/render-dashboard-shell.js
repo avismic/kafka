@@ -5,9 +5,12 @@
 export function renderDashboardShell(container, hotelName, empCount, roomCount) {
   container.innerHTML = `
         <div class="dashboard-container">
-            <header class="dashboard-header">
-                <h1>${hotelName} Dashboard</h1>
-                <p>Welcome to your Kafka Management Suite.</p>
+            <header class="dashboard-header" style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h1>${hotelName} Dashboard</h1>
+                    <p>Welcome to your Kafka Management Suite.</p>
+                </div>
+                <button class="update-btn" onclick="window.location.hash = '#assign-task'">Assign Task</button>
             </header>
             <div id="searchBarContainer"></div>
             
@@ -21,6 +24,16 @@ export function renderDashboardShell(container, hotelName, empCount, roomCount) 
                     <p class="stat-value" id="roomStatCount">${roomCount}</p>
                 </div>
             </div>
+
+            <section id="taskSection">
+                <div class="section-header">
+                    <h2>Live Task Monitor</h2>
+                    <span class="status-badge occupied" id="taskActiveCount">0 Active</span>
+                </div>
+                <div id="taskFilterContainer"></div>
+                <div id="taskListContainer" class="employee-table-wrapper"></div>
+                <div id="taskPaginationContainer"></div>
+            </section>
 
             <section id="employeeSection">
                 <div class="section-header">

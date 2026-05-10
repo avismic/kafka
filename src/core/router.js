@@ -1,12 +1,10 @@
-/**
- * src/core/router.js
- * Minimalist Hash-based Router for Project Kafka
- */
+//src/core/router.js
+
 import { initRegister } from '../register/register.js';
-// 1. IMPORT the real dashboard module
 import { initDashboard } from '../dashboard/dashboard.js'; 
 import { initLogin } from '../login/login.js';
 import { initSettings } from '../settings/settings.js';
+import { initTasks } from '../tasks/tasks.js';
 
 const routes = {
     '': initRegister,
@@ -14,6 +12,7 @@ const routes = {
     '#dashboard': initDashboard,
     '#login': initLogin,
     '#settings': initSettings,
+    '#assign-task': initTasks,
 };
 
 export function handleRoute() {
