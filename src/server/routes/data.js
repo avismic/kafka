@@ -3,20 +3,30 @@ const db = require("../db");
 const auth = require("../middleware/auth");
 
 // BULK UPDATE EMPLOYEES
+// UPDATE BULK SYNC TO INCLUDE CODES AND PASSWORDS
 router.post("/employees/bulk", auth, async (req, res) => {
-  const { employees } = req.body; // Array of employee objects
+  const { employees } = req.body;
   try {
-    // 1. Clear existing records for this hotel to prevent duplicates (Sync strategy)
     await db.query("DELETE FROM employees WHERE hotel_id = $1", [req.hotelId]);
 
-    // 2. Construct multi-row insert
     for (let emp of employees) {
+      // We store the plain password for your Excel export later,
+      // but in production, we should hash this immediately.
       await db.query(
-        "INSERT INTO employees (hotel_id, name, email, role, department) VALUES ($1, $2, $3, $4, $5)",
-        [req.hotelId, emp.name, emp.email, emp.role, emp.dept],
+        `INSERT INTO employees (hotel_id, name, email, role, department, employee_code, password_hash) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [
+          req.hotelId,
+          emp.name,
+          emp.email,
+          emp.role,
+          emp.dept,
+          emp.code,
+          emp.tempPassword,
+        ],
       );
     }
-    res.json({ message: "Employees synchronized with Neon" });
+    res.json({ message: "Employee directory updated with login access." });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -151,6 +161,28 @@ router.get("/tasks", auth, async (req, res) => {
 
     res.json(tasks);
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// UPDATE EMPLOYEE CREDENTIALS (Code & Password)
+router.patch("/employees/:id/credentials", auth, async (req, res) => {
+  const { employee_code, password_hash } = req.body;
+  try {
+    await db.query(
+      `UPDATE employees 
+             SET employee_code = $1, password_hash = $2 
+             WHERE id = $3 AND hotel_id = $4`,
+      [employee_code, password_hash, req.params.id, req.hotelId],
+    );
+    res.json({ message: "Credentials updated successfully" });
+  } catch (err) {
+    // Handle unique constraint violation if code is already taken
+    if (err.code === "23505") {
+      return res
+        .status(400)
+        .json({ error: "This Employee Code is already in use." });
+    }
     res.status(500).json({ error: err.message });
   }
 });

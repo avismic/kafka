@@ -30,19 +30,61 @@ router.post("/register", async (req, res) => {
 });
 
 // LOGIN HOTEL
+// server/routes/auth.js
 router.post("/login", async (req, res) => {
-  const { email, password } = req.body;
-  const result = await db.query("SELECT * FROM hotels WHERE email = $1", [
-    email,
-  ]);
-  if (result.rows.length === 0)
-    return res.status(400).json({ error: "User not found" });
+  // 1. Match the key name 'email' from your frontend login.js
+  const { email: identifier, password } = req.body;
 
-  const validPass = await bcrypt.compare(password, result.rows[0].password);
-  if (!validPass) return res.status(400).json({ error: "Invalid password" });
+  try {
+    // 1. Check if it's a Manager (Email login)
+    let userResult = await db.query("SELECT * FROM hotels WHERE email = $1", [
+      identifier,
+    ]);
+    let role = "manager";
 
-  const token = jwt.sign({ id: result.rows[0].id }, process.env.JWT_SECRET);
-  res.json({ token, hotelName: result.rows[0].name });
+    // 2. If not found, check if it's an Employee (Code login)
+    if (userResult.rows.length === 0) {
+      userResult = await db.query(
+        "SELECT * FROM employees WHERE employee_code = $1",
+        [identifier],
+      );
+      role = "staff";
+    }
+
+    if (userResult.rows.length === 0) {
+      return res.status(400).json({ error: "User not found" });
+    }
+
+    const user = userResult.rows[0];
+
+    // 3. Proper Password Validation
+    if (role === "manager") {
+      // Managers use Bcrypt (since you hash them in /register)
+      const isMatch = await bcrypt.compare(password, user.password);
+      if (!isMatch)
+        return res.status(400).json({ error: "Invalid credentials" });
+    } else {
+      // Staff currently use plain text (from your Directory setup)
+      if (password !== user.password_hash) {
+        return res.status(400).json({ error: "Invalid credentials" });
+      }
+    }
+
+    // 4. Generate Token
+    const token = jwt.sign(
+      {
+        id: user.hotel_id || user.id, // Hotel Context
+        userId: user.id, // Specific User ID
+        role: role,
+      },
+      process.env.JWT_SECRET,
+    );
+
+    res.json({ token, role, name: user.name });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 router.get("/me", auth, async (req, res) => {

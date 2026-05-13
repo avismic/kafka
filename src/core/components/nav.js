@@ -13,6 +13,7 @@ export function renderNav(containerId) {
                 <div class="nav-logo">Kafka</div>
                 <ul class="nav-links">
                     <li><a href="#dashboard" class="nav-item">Dashboard</a></li>
+                    <li><a href="#employees" class="nav-item">Employees</a></li>
                     <li><a href="#settings" class="nav-item">Account</a></li>
                 </ul>
             </div>

@@ -19,7 +19,7 @@ export function initLogin(containerId) {
             <form id="loginForm" class="login-form">
                 <div class="form-group">
                     <label>EMAIL</label>
-                    <input type="email" id="loginEmail" placeholder="manager@hotel.com" required>
+                    <input type="text" id="loginEmail" placeholder="Email or Employee Code" required>
                 </div>
                 <div class="form-group">
                     <label>PASSWORD</label>
@@ -44,25 +44,31 @@ function bindLoginEvents() {
     e.preventDefault();
 
     const credentials = {
+      // This 'email' key is what the backend uses as the universal identifier
       email: document.getElementById("loginEmail").value,
       password: document.getElementById("loginPassword").value,
     };
 
     try {
-      // 2. Call our centralized API service
       const response = await api.auth.login(credentials);
 
-      // 3. Securely store the JWT and Hotel metadata
+      // 1. Store the token with the key expected by your API service
       localStorage.setItem("kafka_auth_token", response.token);
 
+      // 2. Store the role and name for UI logic
+      localStorage.setItem("userRole", response.role);
+      localStorage.setItem("userName", response.name);
+
+      // 3. Update global state
       globalState.saveHotelData({
-        hotelName: response.hotelName,
+        userName: response.name,
+        userRole: response.role,
         isLoggedIn: true,
       });
 
-      console.log("Login successful. Token stored.");
+      console.log(`${response.role} login successful.`);
 
-      // 4. Redirect to the secure Dashboard
+      // 4. Redirect to Dashboard
       window.location.hash = "#dashboard";
     } catch (error) {
       console.error("Login failed:", error);

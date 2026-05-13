@@ -3,26 +3,50 @@
 import { renderTaskList } from "../components/task-list.js";
 import { renderPagination } from "../components/pagination.js";
 import { renderTableFilters } from "../components/table-filters.js";
+import { state as globalState } from "../../core/state.js";
 
 export function refreshTaskUI(tasks, dashboardState) {
   const currentView = dashboardState.task.view;
 
-  // 1. Filter based on the Active View (Pending vs Completed)
+  // 1. Context check with debug logs
+  const hotelData = globalState.getHotelData();
+
+  // Normalize values to prevent case-sensitivity bugs
+  const userRole = (hotelData.userRole || "").toLowerCase().trim();
+  const userName = (hotelData.userName || "").trim();
+
+  console.log(`[Permission Check] User: ${userName}, Role: ${userRole}`);
+
+  // 2. Filter logic
   const displayTasks = tasks.filter((t) => {
     const matchesStatus = t.status === currentView;
     const matchesType =
       dashboardState.task.filters.type === "all" ||
       t.type === dashboardState.task.filters.type;
-    const matchesAssignee = (t.assignee || "")
+
+    const matchesAssigneeSearch = (t.assignee || "")
       .toLowerCase()
       .includes((dashboardState.task.filters.assignee || "").toLowerCase());
 
-    return matchesStatus && matchesType && matchesAssignee;
+    // ROLE VISIBILITY LOGIC
+    // Using normalized 'userRole' for safety
+    const hasPermission = userRole === "manager" || t.assignee === userName;
+
+    // DEBUG: If you are a manager but tasks are missing, check this log:
+    if (userRole === "manager" && !hasPermission) {
+      console.warn(
+        `Manager check failed for task ID: ${t.id}. Role detected as: '${userRole}'`,
+      );
+    }
+
+    return (
+      matchesStatus && matchesType && matchesAssigneeSearch && hasPermission
+    );
   });
 
+  // ... (rest of the sorting and rendering logic remains the same)
   let sorted = [...displayTasks].sort((a, b) => b.id - a.id);
 
-  // 2. Render Filters & the new View Toggle
   const types = [...new Set(tasks.map((t) => t.type))];
   renderTableFilters(
     "taskFilterContainer",
@@ -36,9 +60,12 @@ export function refreshTaskUI(tasks, dashboardState) {
   );
 
   injectTaskViewToggle(dashboardState, tasks);
-  injectAssigneeFilter(dashboardState, tasks);
 
-  // 3. Pagination & Render
+  // Only managers get the search-by-assignee input
+  if (userRole === "manager") {
+    injectAssigneeFilter(dashboardState, tasks);
+  }
+
   const { page, size } = dashboardState.task;
   const paginated = sorted.slice((page - 1) * size, page * size);
   renderTaskList("taskListContainer", paginated);

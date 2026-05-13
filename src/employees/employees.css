@@ -1,0 +1,31 @@
+/**
+ * src/employees/employees.css
+ */
+.code-badge {
+    background: #f4f4f7;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-family: 'SF Mono', monospace;
+    font-size: 12px;
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+}
+
+.password-blur {
+    filter: blur(4px);
+    transition: filter 0.3s ease;
+    cursor: pointer;
+    user-select: none;
+}
+
+.password-blur:hover {
+    filter: blur(0);
+}
+
+.segmented-control {
+    display: flex;
+    background: #f2f2f7;
+    padding: 2px;
+    border-radius: 8px;
+    border: 1px solid var(--color-border);
+}

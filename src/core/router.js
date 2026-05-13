@@ -5,6 +5,7 @@ import { initDashboard } from '../dashboard/dashboard.js';
 import { initLogin } from '../login/login.js';
 import { initSettings } from '../settings/settings.js';
 import { initTasks } from '../tasks/tasks.js';
+import { initEmployees } from '../employees/employees.js';
 
 const routes = {
     '': initRegister,
@@ -13,6 +14,7 @@ const routes = {
     '#login': initLogin,
     '#settings': initSettings,
     '#assign-task': initTasks,
+    '#employees': initEmployees,
 };
 
 export function handleRoute() {
