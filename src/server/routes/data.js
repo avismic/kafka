@@ -96,6 +96,7 @@ router.post("/tasks", auth, async (req, res) => {
     type,
     assignee,
     assigneeId,
+    creatorName,
     destination,
     duration,
     checklist,
@@ -103,15 +104,16 @@ router.post("/tasks", auth, async (req, res) => {
   } = req.body;
   try {
     await db.query(
-      `INSERT INTO tasks (id, hotel_id, assignee_id, created_by_id, type, assignee_name, destination, duration, checklist, notes, status) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      `INSERT INTO tasks (id, hotel_id, assignee_id, created_by_id, type, assignee_name, creator_name, destination, duration, checklist, notes, status) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
       [
         id,
         req.hotelId,
         assigneeId,
-        req.userId, // Captured from the auth token
+        req.userId,
         type,
         assignee,
+        creatorName,
         destination,
         duration,
         JSON.stringify(checklist),
@@ -119,7 +121,7 @@ router.post("/tasks", auth, async (req, res) => {
         "pending",
       ],
     );
-    res.status(201).json({ message: "Task persistent with ID tracking" });
+    res.status(201).json({ message: "Task persistent with creator tracking" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -138,7 +140,33 @@ router.patch("/tasks/:id/status", auth, async (req, res) => {
   }
 });
 
-// GET ALL TASKS FOR THE HOTEL
+// 1. START TASK (Record timestamp)
+router.patch("/tasks/:id/start", auth, async (req, res) => {
+  try {
+    await db.query(
+      "UPDATE tasks SET started_at = NOW() WHERE id = $1 AND hotel_id = $2",
+      [req.params.id, req.hotelId],
+    );
+    res.json({ message: "Task started" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 2. COMPLETE TASK (Update Status + Record timestamp)
+router.patch("/tasks/:id/status", auth, async (req, res) => {
+  try {
+    await db.query(
+      "UPDATE tasks SET status = $1, completed_at = NOW() WHERE id = $2 AND hotel_id = $3",
+      [req.body.status, req.params.id, req.hotelId],
+    );
+    res.json({ message: "Task status and completion time updated" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 3. UPDATE GET TASKS (Ensure timestamps are returned to frontend)
 router.get("/tasks", auth, async (req, res) => {
   try {
     const result = await db.query(
@@ -146,17 +174,19 @@ router.get("/tasks", auth, async (req, res) => {
       [req.hotelId],
     );
 
-    // Convert the database rows back to the frontend format
     const tasks = result.rows.map((row) => ({
       id: row.id,
       type: row.type,
       assignee: row.assignee_name,
+      creator: row.creator_name || "Manager",
       assigneeId: row.assignee_id,
       destination: row.destination,
       duration: row.duration,
-      checklist: row.checklist, // JSONB is automatically parsed by pg
+      checklist: row.checklist,
       notes: row.notes,
       status: row.status,
+      started_at: row.started_at, // NEW
+      completed_at: row.completed_at, // NEW
     }));
 
     res.json(tasks);
@@ -183,6 +213,24 @@ router.patch("/employees/:id/credentials", auth, async (req, res) => {
         .status(400)
         .json({ error: "This Employee Code is already in use." });
     }
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE TASK (Manager only - can only delete tasks they created)
+router.delete("/tasks/:id", auth, async (req, res) => {
+  try {
+    const result = await db.query(
+      "DELETE FROM tasks WHERE id = $1 AND hotel_id = $2 AND created_by_id = $3",
+      [req.params.id, req.hotelId, req.userId],
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(403).json({ error: "Unauthorized or task not found" });
+    }
+
+    res.json({ message: "Task deleted successfully" });
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });

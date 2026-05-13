@@ -8,6 +8,7 @@ export async function initTasks(containerId) {
   const app = document.getElementById(containerId);
   const data = globalState.getHotelData();
   const employees = data.employees || [];
+  const currentUserName = data.userName || "Manager";
   renderNav("global-nav-container");
   renderTaskForm(app, data.employees || [], data.rooms || []);
 
@@ -38,6 +39,7 @@ export async function initTasks(containerId) {
       type: document.getElementById("taskType").value,
       assignee: assigneeName,
       assigneeId: selectedEmp ? selectedEmp.id : null,
+      creatorName: currentUserName,
       destination: document.getElementById("taskDestInput").value,
       duration: duration,
       checklist: Array.from(document.querySelectorAll(".checklist-item"))
@@ -54,9 +56,19 @@ export async function initTasks(containerId) {
 
       showToast("Task assigned and synced to cloud.");
       e.target.reset();
-      setTimeout(() => {
-        window.location.hash = "#dashboard";
-      }, 1000);
+      const checklistContainer = document.getElementById("checklistContainer");
+      if (checklistContainer) {
+        checklistContainer.innerHTML = `
+            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                <input type="text" class="editing-input checklist-item" placeholder="Task requirement...">
+                <button type="button" class="update-btn" onclick="addChecklistItem()">+</button>
+            </div>`;
+      }
+      const customInput = document.getElementById("customDurationInput");
+      if (customInput) customInput.style.display = "none";
+      // setTimeout(() => {
+      //   window.location.hash = "#dashboard";
+      // }, 1000);
     } catch (error) {
       console.error("Sync Error:", error);
       showToast(`Sync failed: ${error.message}`);

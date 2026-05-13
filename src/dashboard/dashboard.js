@@ -12,11 +12,18 @@ import { renderDashboardShell } from "./helpers/render-dashboard-shell.js";
 import { renderTaskList } from "./components/task-list.js";
 import { refreshTaskUI } from "./helpers/refresh-task-ui.js";
 import { handleCompleteTask } from "./helpers/handle-complete-task.js";
+import { handleStartTask } from "./helpers/handle-start-task.js";
+import { handleDeleteTask } from "./helpers/handle-delete-task.js";
 
 const dashboardState = {
   employee: { page: 1, size: 5, filters: { role: "all" } },
   room: { page: 1, size: 5, filters: { type: "all", status: "all" } },
-  task: { page: 1, size: 5, filters: { type: "all", assignee: "" }, view: "pending" },
+  task: {
+    page: 1,
+    size: 5,
+    filters: { type: "all", assignee: "" },
+    view: "pending",
+  },
   searchQuery: "",
 };
 
@@ -62,8 +69,18 @@ window.handleEdit = (btn, index, type) =>
   handleEdit(btn, index, type, () => initDashboard("app"));
 window.handleDeleteEmployee = (btn, index) =>
   handleDeleteEmployee(btn, index, () => initDashboard("app"));
+window.handleStartTask = (taskId) => {
+  handleStartTask(taskId, (updatedTasks) => {
+    refreshTaskUI(updatedTasks, dashboardState);
+  });
+};
 window.handleCompleteTask = (taskId) => {
   handleCompleteTask(taskId, (updatedTasks) => {
+    refreshTaskUI(updatedTasks, dashboardState);
+  });
+};
+window.handleDeleteTask = (taskId) => {
+  handleDeleteTask(taskId, (updatedTasks) => {
     refreshTaskUI(updatedTasks, dashboardState);
   });
 };

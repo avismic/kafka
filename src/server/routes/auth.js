@@ -31,24 +31,32 @@ router.post("/register", async (req, res) => {
 
 // LOGIN HOTEL
 // server/routes/auth.js
+// server/routes/auth.js
+
 router.post("/login", async (req, res) => {
-  // 1. Match the key name 'email' from your frontend login.js
   const { email: identifier, password } = req.body;
 
   try {
-    // 1. Check if it's a Manager (Email login)
+    // 1. Check if it's the Hotel Owner (Email login)
     let userResult = await db.query("SELECT * FROM hotels WHERE email = $1", [
       identifier,
     ]);
-    let role = "manager";
+    let systemRole = "manager";
 
-    // 2. If not found, check if it's an Employee (Code login)
+    // 2. If not found, check the Employees table (Code login)
     if (userResult.rows.length === 0) {
       userResult = await db.query(
         "SELECT * FROM employees WHERE employee_code = $1",
         [identifier],
       );
-      role = "staff";
+
+      if (userResult.rows.length > 0) {
+        const emp = userResult.rows[0];
+        // NEW: Check the employee's job title.
+        // If it contains 'Manager', grant them system manager permissions.
+        const jobTitle = (emp.role || "").toLowerCase();
+        systemRole = jobTitle.includes("manager") ? "manager" : "staff";
+      }
     }
 
     if (userResult.rows.length === 0) {
@@ -57,32 +65,30 @@ router.post("/login", async (req, res) => {
 
     const user = userResult.rows[0];
 
-    // 3. Proper Password Validation
-    if (role === "manager") {
-      // Managers use Bcrypt (since you hash them in /register)
+    // 3. Password Check (Keep your existing logic)
+    const isManagerLogin = !user.employee_code; // If no code, it's the hotel owner
+    if (isManagerLogin) {
       const isMatch = await bcrypt.compare(password, user.password);
       if (!isMatch)
         return res.status(400).json({ error: "Invalid credentials" });
     } else {
-      // Staff currently use plain text (from your Directory setup)
       if (password !== user.password_hash) {
         return res.status(400).json({ error: "Invalid credentials" });
       }
     }
 
-    // 4. Generate Token
+    // 4. Generate Token with the CORRECT systemRole
     const token = jwt.sign(
       {
-        id: user.hotel_id || user.id, // Hotel Context
-        userId: user.id, // Specific User ID
-        role: role,
+        id: user.hotel_id || user.id,
+        userId: user.id,
+        role: systemRole, // Use the detected role
       },
       process.env.JWT_SECRET,
     );
 
-    res.json({ token, role, name: user.name });
+    res.json({ token, role: systemRole, name: user.name });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ error: err.message });
   }
 });

@@ -7,46 +7,52 @@ import { state as globalState } from "../../core/state.js";
 
 export function refreshTaskUI(tasks, dashboardState) {
   const currentView = dashboardState.task.view;
-
-  // 1. Context check with debug logs
   const hotelData = globalState.getHotelData();
-
-  // Normalize values to prevent case-sensitivity bugs
   const userRole = (hotelData.userRole || "").toLowerCase().trim();
   const userName = (hotelData.userName || "").trim();
 
-  console.log(`[Permission Check] User: ${userName}, Role: ${userRole}`);
-
-  // 2. Filter logic
+  // 1. Filter logic with Robust Time Archival
   const displayTasks = tasks.filter((t) => {
-    const matchesStatus = t.status === currentView;
+    // Basic Permissions
     const matchesType =
       dashboardState.task.filters.type === "all" ||
       t.type === dashboardState.task.filters.type;
-
     const matchesAssigneeSearch = (t.assignee || "")
       .toLowerCase()
       .includes((dashboardState.task.filters.assignee || "").toLowerCase());
-
-    // ROLE VISIBILITY LOGIC
-    // Using normalized 'userRole' for safety
     const hasPermission = userRole === "manager" || t.assignee === userName;
 
-    // DEBUG: If you are a manager but tasks are missing, check this log:
-    if (userRole === "manager" && !hasPermission) {
-      console.warn(
-        `Manager check failed for task ID: ${t.id}. Role detected as: '${userRole}'`,
-      );
-    }
+    if (!(matchesType && matchesAssigneeSearch && hasPermission)) return false;
 
-    return (
-      matchesStatus && matchesType && matchesAssigneeSearch && hasPermission
-    );
+    // Time Check Logic
+    const now = Date.now();
+    // Ensure completed_at is parsed correctly regardless of format
+    const completedTime = t.completed_at
+      ? new Date(t.completed_at).getTime()
+      : null;
+
+    // Calculate if task was finished within the last 24 hours (86,400,000 ms)
+    const isRecent = completedTime && now - completedTime < 86400000;
+
+    if (currentView === "pending") {
+      // LIVE: Show all tasks still in progress OR completed tasks under 24h old
+      return t.status === "pending" || (t.status === "completed" && isRecent);
+    } else {
+      // HISTORY: Show only tasks that are completed AND older than 24h
+      return t.status === "completed" && !isRecent;
+    }
   });
 
-  // ... (rest of the sorting and rendering logic remains the same)
-  let sorted = [...displayTasks].sort((a, b) => b.id - a.id);
+  // 2. Sorting Logic: Active Pending -> Recent Completed -> Time Assigned
+  let sorted = [...displayTasks].sort((a, b) => {
+    if (a.status !== b.status) {
+      return a.status === "pending" ? -1 : 1;
+    }
+    // Secondary sort: newest assigned task at top of its status group
+    return b.id - a.id;
+  });
 
+  // 3. UI Component Updates (Filters/Toggle)
   const types = [...new Set(tasks.map((t) => t.type))];
   renderTableFilters(
     "taskFilterContainer",
@@ -60,15 +66,12 @@ export function refreshTaskUI(tasks, dashboardState) {
   );
 
   injectTaskViewToggle(dashboardState, tasks);
+  if (userRole === "manager") injectAssigneeFilter(dashboardState, tasks);
 
-  // Only managers get the search-by-assignee input
-  if (userRole === "manager") {
-    injectAssigneeFilter(dashboardState, tasks);
-  }
-
+  // 4. Final Render
   const { page, size } = dashboardState.task;
   const paginated = sorted.slice((page - 1) * size, page * size);
-  renderTaskList("taskListContainer", paginated);
+  renderTaskList("taskListContainer", paginated, userRole, userName);
 
   renderPagination(
     "taskPaginationContainer",
@@ -85,7 +88,7 @@ export function refreshTaskUI(tasks, dashboardState) {
   );
 
   document.getElementById("taskActiveCount").textContent =
-    `${sorted.length} ${currentView === "pending" ? "Active" : "Archived"}`;
+    `${sorted.length} ${currentView === "pending" ? "Live" : "Archived"}`;
 }
 
 function injectTaskViewToggle(dashboardState, tasks) {
